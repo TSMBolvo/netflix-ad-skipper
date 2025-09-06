@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Netflix Ad Skipper (Ad Markers)
+// @name         Netflix Ad Skipper (Manifest-Based)
 // @namespace    https://github.com/TSMBolvo/netflix-ad-skipper
-// @version      1.2
-// @description  Automatically skip ads on Netflix (including ad markers in series)
+// @version      1.3
+// @description  Skip Netflix ads precisely using the manifest JSON timeline
 // @author       TSMBolvo
 // @match        *://*.netflix.com/*
 // @grant        none
@@ -14,26 +14,40 @@
 (function() {
     'use strict';
 
-    console.log("[Netflix Ad Skipper] Loaded");
+    console.log("[Netflix Ad Skipper v1.3] Loaded");
 
-    const skipIfAd = (video) => {
-        if (!video) return;
+    let adBreaks = [];
 
-        // Detect ads based on duration (15-60s typical range)
-        if (video.duration >= 15 && video.duration <= 60) {
-            console.log(`[Netflix Ad Skipper] Skipping short ad segment (${video.duration.toFixed(1)}s)`);
-            video.currentTime = video.duration;
-            return;
+    const getPlayerManifest = () => {
+        try {
+            const player = document.querySelector('video');
+            if (!player) return;
+
+            const state = window.netflix && window.netflix.react && window.netflix.react.store;
+            if (!state) return;
+
+            const playbackState = state.getState && state.getState().playback;
+            if (playbackState && playbackState.playbackManifest && playbackState.playbackManifest.adBreaks) {
+                adBreaks = playbackState.playbackManifest.adBreaks.map(ad => ({
+                    start: ad.startTime,
+                    end: ad.endTime
+                }));
+            }
+        } catch (e) {
+            console.warn("[Netflix Ad Skipper] Failed to read manifest:", e);
         }
+    };
 
-        // Detect ad markers: Netflix sets 'adBreak' segments where controls are yellow
-        if (document.querySelector('.ad-break-marker')) {
-            const current = video.currentTime;
-            const duration = video.duration;
-            // If near an ad marker, skip forward a bit
-            if (duration > 120 && (current / duration) < 0.95) {
-                console.log(`[Netflix Ad Skipper] Ad marker detected at ${current.toFixed(1)}s — jumping forward`);
-                video.currentTime = current + 90; // jump ~1.5 minutes past ad
+    const skipAds = (video) => {
+        if (!video || adBreaks.length === 0) return;
+
+        const currentTime = video.currentTime;
+
+        for (const ad of adBreaks) {
+            if (currentTime >= ad.start && currentTime < ad.end) {
+                console.log(`[Netflix Ad Skipper] Skipping ad from ${ad.start}s → ${ad.end}s`);
+                video.currentTime = ad.end + 0.1; // jump just past the ad
+                break;
             }
         }
     };
@@ -41,9 +55,9 @@
     const observer = new MutationObserver(() => {
         const video = document.querySelector('video');
         if (video) {
-            video.addEventListener('timeupdate', () => {
-                skipIfAd(video);
-            }, { once: false });
+            getPlayerManifest();
+
+            video.addEventListener('timeupdate', () => skipAds(video), { once: false });
         }
     });
 
