@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Netflix Ad Skipper (Site-Specific)
 // @namespace    https://github.com/TSMBolvo/netflix-ad-skipper
-// @version      1.0
-// @description  Automatically skip or mute ads on Netflix (only runs on Netflix)
+// @version      1.1
+// @description  Automatically skip ads on Netflix (only runs on Netflix)
 // @author       TSMBolvo
 // @match        *://*.netflix.com/*
 // @grant        none
@@ -17,9 +17,9 @@
     console.log("[Netflix Ad Skipper] Loaded");
 
     const skipAd = (video) => {
-        // Example detection logic: ads usually < 90 seconds
-        if (video && video.duration > 0 && video.duration < 90) {
-            console.log("[Netflix Ad Skipper] Ad detected — skipping");
+        // Netflix ads usually 15–60 seconds long
+        if (video && video.duration >= 15 && video.duration <= 60) {
+            console.log(`[Netflix Ad Skipper] Ad detected (${video.duration.toFixed(1)}s) — skipping`);
             video.currentTime = video.duration; // jump to end
         }
     };
@@ -29,7 +29,7 @@
         if (video) {
             skipAd(video);
 
-            // Watch video progress continuously
+            // Continuously check while video plays
             video.addEventListener('timeupdate', () => {
                 skipAd(video);
             }, { once: false });
